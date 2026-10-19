@@ -27,3 +27,14 @@ def side_by_side(images, titles, width=640):
         img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
         out.append(label(img, title, (0, 0, 255), scale=2.0))
     return np.hstack(out)
+
+
+def grid(images, titles, cols, width=640):
+    """Images in a grid with `cols` columns (all are resized to the same size)."""
+    height = int(width * 9 / 16)
+    tiles = [label(cv2.resize(to_bgr(img), (width, height)), t, scale=1.4, bottom=True)
+             for img, t in zip(images, titles)]
+    while len(tiles) % cols:
+        tiles.append(np.zeros_like(tiles[0]))
+    rows = [np.hstack(tiles[i:i + cols]) for i in range(0, len(tiles), cols)]
+    return np.vstack(rows)

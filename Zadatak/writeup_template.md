@@ -15,7 +15,8 @@ The goals / steps of this project are the following:
 
 [image1]: ./output_images/01_undistort_chessboard.jpg "Undistorted"
 [image2]: ./output_images/01_undistort_road.jpg "Road Transformed"
-
+[image3]: ./output_images/02_binary.jpg "Binary Example"
+[image3b]: ./output_images/02_binary_test5.jpg "Binary test5"
 ---
 
 ### Writeup / README
@@ -106,7 +107,44 @@ edges (car hood, trees at the border); the centre of the image changes very litt
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-TODO: Add your text here!!!
+
+**Goal.** Make a black-and-white image where only the lane markings are white. The next steps look
+for the lines only among these white pixels.
+
+**Code.** [lane_finding/thresholds.py](lane_finding/thresholds.py) (`lane_masks`), run with
+`python binary_step.py`. The input is the undistorted image from step 1, slightly blurred
+(`GaussianBlur` 5 x 5) to remove noise.
+
+The binary image is made of two masks, one for **yellow** and one for **white** lines:
+
+* **Yellow** - I first tried HSV with `cv2.inRange`, but it also picked up dry grass (2nd column
+  below). So I used the **b channel of Lab** instead: b is high for yellow and does not depend much
+  on brightness, so it works both in shadow and in sun. A pixel is yellow if its b value is high and
+  higher than its surroundings.
+* **White** - the pixel must be:
+  1. **bright** in the R channel. The threshold is taken from the histogram of the road in front of
+     the car, not fixed: on dark asphalt it is 126, on bright concrete 220. A fixed threshold made the
+     whole concrete road white;
+  2. **narrow** - morphological top-hat keeps only thin bright stripes, so big bright areas (concrete
+     patches, cars) are removed;
+  3. **not coloured** (low HSV saturation) - otherwise brown dirt next to the road was taken as a line.
+
+At the end, everything wider than a lane marking is removed.
+
+I also tried the **Sobel x** gradient. It finds the lines, but also every shadow, crack and tree (last
+column), so I did not use it.
+
+Columns: image, HSV yellow (first try), Lab yellow, white mask, **final binary**, Sobel x:
+
+![alt text][image3]
+
+Final result on `test5.jpg` (concrete with shadows):
+
+![alt text][image3b]
+
+Some white pixels remain in the sky and trees. They are removed in the next step with a region of
+interest (only the road in front of the car is kept).
+
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 

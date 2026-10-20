@@ -13,10 +13,12 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./output_images/01_undistort_chessboard.jpg "Undistorted"
-[image2]: ./output_images/01_undistort_road.jpg "Road Transformed"
-[image3]: ./output_images/02_binary.jpg "Binary Example"
-[image3b]: ./output_images/02_binary_test5.jpg "Binary test5"
+[image1]: ./docs/01_undistort_chessboard.jpg "Undistorted"
+[image2]: ./docs/01_undistort_road.jpg "Road Transformed"
+[image3]: ./docs/02_binary.jpg "Binary Example"
+[image3b]: ./docs/02_binary_test5.jpg "Binary test5"
+[image4]: ./docs/03_perspective.jpg "Warp Example"
+[image4b]: ./docs/03_binary_warped.jpg "Binary in bird's-eye view"
 ---
 
 ### Writeup / README
@@ -111,7 +113,7 @@ edges (car hood, trees at the border); the centre of the image changes very litt
 **Goal.** Make a black-and-white image where only the lane markings are white. The next steps look
 for the lines only among these white pixels.
 
-**Code.** [lane_finding/thresholds.py](lane_finding/thresholds.py) (`lane_masks`), run with
+**Code.** [lane_finding/thresholds.py](Zadatak/lane_finding/thresholds.py) (`lane_masks`), run with
 `python binary_step.py`. The input is the undistorted image from step 1, slightly blurred
 (`GaussianBlur` 5 x 5) to remove noise.
 
@@ -148,7 +150,41 @@ interest (only the road in front of the car is kept).
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-TODO: Add your text here!!!
+**Goal.** In the camera image the lane lines come together towards the horizon. Seen from above
+(bird's-eye view) they are parallel, so it is easier to find them and fit a curve.
+
+**Code.** [lane_finding/perspective.py](Zadatak/lane_finding/perspective.py) (class `Perspective`), run with
+`python perspective_step.py`. It uses `cv2.getPerspectiveTransform` and `cv2.warpPerspective`, like the
+`warper()` function given with the assignment.
+
+**How I chose the points.** On images of a **straight** road (`straight_lines1/2.jpg`) I placed a
+trapezoid (`src`, red in the figure) on the left and right line of our lane, from just above the car hood
+to some distance ahead. It is mapped to a rectangle (`dst`) where our lane is between 35 % and 65 % of
+the image width, so there is room left for the neighbouring lanes:
+
+| | top-left | top-right | bottom-right | bottom-left |
+|---|---|---|---|---|
+| `src` (1280 x 720) | (567, 468) | (712, 468) | (1025, 676) | (254, 676) |
+| `dst` | (448, 0) | (832, 0) | (832, 720) | (448, 720) |
+
+**Check.** On a straight road both lines must become vertical and parallel. They lie on the red vertical
+guides at 35 % and 65 %:
+
+![alt text][image4]
+
+The cameras in the recordings are not mounted the same way, so one trapezoid does not fit all of them.
+I chose the points separately for each camera setup, always on a straight part of the road (the third row
+above is the 960 x 540 camera).
+
+**Region of interest (ROI).** The perspective transform only changes the geometry, it does not remove the
+sky and trees from step 2. For that I use a ROI mask (blue in the figure): only the road in front of the
+car is kept (`cv2.fillPoly` + `cv2.bitwise_and`).
+
+From now on the image is first warped and then turned into a binary image (same functions as in step 2),
+and the ROI is applied. In the top view all markings have about the same width, so one top-hat kernel
+fits the whole image. Only the lane lines remain:
+
+![alt text][image4b]
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 

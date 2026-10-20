@@ -5,8 +5,8 @@
 Loads the calibration from step 1, undistorts each example image and builds the
 binary image (lane_finding/thresholds.py). Writes:
 
-    output_images/02_binary.jpg     the masks side by side for several examples
-    output_images/02_binary_<name>.jpg   original and final binary image for each example
+    docs/02_binary.jpg     the masks side by side for several examples
+    docs/02_binary_<name>.jpg   original and final binary image for each example
 """
 import os
 
@@ -18,7 +18,7 @@ from lane_finding.calibration import load_calibration, undistort
 from lane_finding.drawing import grid, side_by_side
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(ROOT, "output_images")
+OUT = os.path.normpath(os.path.join(ROOT, "..", "docs"))   # images for the README
 
 EXAMPLES = [("test5", "test_images/test5.jpg", None),
             ("straight_lines1", "test_images/straight_lines1.jpg", None),
@@ -59,7 +59,7 @@ def main():
                     side_by_side([img, final], ["Undistorted", "Binary"]))
 
     cv2.imwrite(os.path.join(OUT, "02_binary.jpg"), np.vstack(rows))
-    print("Saved binary images to output_images/")
+    print("Saved binary images to docs/")
 
 
 if __name__ == "__main__":

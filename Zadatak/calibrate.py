@@ -13,6 +13,8 @@ from lane_finding.drawing import side_by_side
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CALIB_FILE = os.path.join(ROOT, "camera_cal", "calib.npz")
+# images for the README are stored in /docs at the root of the repository
+DOCS = os.path.normpath(os.path.join(ROOT, "..", "docs"))
 
 
 def main():
@@ -27,7 +29,7 @@ def main():
     print("Camera matrix:\n", mtx)
     print("Distortion coefficients (k1, k2, p1, p2, k3):", dist.ravel())
 
-    out = os.path.join(ROOT, "output_images")
+    out = DOCS
     os.makedirs(out, exist_ok=True)
     board = cv2.imread(os.path.join(ROOT, "camera_cal", "calibration1.jpg"))
     if board is None:
@@ -40,7 +42,7 @@ def main():
         raise OSError("Cannot read test_images/test1.jpg")
     cv2.imwrite(os.path.join(out, "01_undistort_road.jpg"),
                 side_by_side([road, undistort(road, mtx, dist)], ["Original", "Undistorted"]))
-    print("Saved", CALIB_FILE, "and example images to output_images/")
+    print("Saved", CALIB_FILE, "and example images to docs/")
 
 
 if __name__ == "__main__":

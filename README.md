@@ -1,4 +1,4 @@
-***Lane Finding Project**
+# Lane Finding Project
 
 The goals / steps of this project are the following:
 
@@ -19,6 +19,7 @@ The goals / steps of this project are the following:
 [image3b]: ./docs/02_binary_test5.jpg "Binary test5"
 [image4]: ./docs/03_perspective.jpg "Warp Example"
 [image4b]: ./docs/03_binary_warped.jpg "Binary in bird's-eye view"
+[image5]: ./docs/04_lane_fit.jpg "Fit Visual"
 ---
 
 ### Writeup / README
@@ -36,7 +37,7 @@ works, and an example result. Sections are completed as the corresponding step i
 the lane curvature and the car position in meters, so this distortion should be removed first.
 Calibration estimates the parameters of a camera and distortion model from images of a known pattern.
 
-**Code.** [lane_finding/calibration.py] (`calibrate_camera`, `undistort`),
+**Code.** [lane_finding/calibration.py](Zadatak/lane_finding/calibration.py) (`calibrate_camera`, `undistort`),
 run with `python calibrate.py`. The procedure follows the course exercises `09_01_calibration.py` and
 `09_02_undistort.py`.
 
@@ -57,7 +58,7 @@ Two images (`calibration7.jpg`, `calibration15.jpg`) are 1281 x 721 instead of 1
 are resized to 1280 x 720
 before corner detection.
 
-***Skipped images.** In `calibration1.jpg`, `calibration4.jpg` and `calibration5.jpg` the complete
+**Skipped images.** In `calibration1.jpg`, `calibration4.jpg` and `calibration5.jpg` the complete
 9 x 6 grid of corners is not found, because part of the board is outside or too close to the image
 border. Without the complete grid the detected corners cannot be matched to the ideal grid, so these
 images are not used. **17 images** are used.
@@ -188,7 +189,47 @@ fits the whole image. Only the lane lines remain:
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-TODO: Add your text here!!!
+**Goal.** Find which white pixels belong to the left and right line of our lane and describe each line
+with a curve.
+
+**Code.** [lane_finding/lane_lines.py](Zadatak/lane_finding/lane_lines.py) (`find_lines`), run with
+`python lane_fit_step.py`. The input is the binary top view with the ROI from step 3.
+
+**Why this approach.** A common way to find lines is edge detection (Canny) followed by the Hough
+transform. It finds **straight** lines, which works on a straight road, but a lane in a curve is not a
+straight line, and the curvature in the next step cannot be measured from straight lines. So I chose a
+method that follows the line as it bends: a **histogram** to find where the lines start, **sliding windows**
+to collect their pixels, and a **second-order polynomial** to describe each line.
+
+**1. Histogram - where do the lines start?** I count the white pixels in every column of the lower half of
+the image; a lane line gives a high peak. I look for a peak near four expected positions: our two lines at
+35 % and 65 % of the width (where step 3 puts them) and the neighbouring lines at 5 % and 95 %. A position
+without a peak gets `None` (`test5`: `[None, 441, 857, 1237]`, no line far left).
+
+**2. Sliding window - follow the line upwards.** From each peak, 9 windows go from the bottom to the top.
+The white pixels in a window belong to the line, and the next window is moved to their centre. A **dashed
+line** has gaps: after an empty window the next one keeps the direction of the line and is a bit wider. A
+window that is almost full of white is not a thin line (a car, grass) and is ignored.
+
+**3. Fit a curve.** The pixels are fitted with `x = A*y^2 + B*y + C` (x as a function of y, because the lines
+are almost vertical). A normal least-squares fit is pulled away by a few wrong pixels, so I use **RANSAC**:
+pick 3 random pixels many times, draw the parabola through them, count the pixels close to it, and refit
+the best one using only those pixels.
+
+The **support** of a line is the share of the 9 height bands where it really has pixels (solid line ~100 %,
+dashed 50-80 %). Below 30 % the line is not accepted.
+
+Example output (`test5`):
+
+```
+left : x = 9.20e-05*y^2 + -0.120*y + 479.3   support 78%
+right: x = 1.50e-05*y^2 + -0.063*y + 889.1   support 78%
+```
+
+Histogram with peaks (left) and windows with line pixels (cyan) and fitted curves (yellow) on `test2`,
+`test5` and `solidYellowCurve`; dark red windows are the gaps of the dashed line:
+
+![alt text][image5]
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 

@@ -54,6 +54,11 @@ class Perspective:
     def warp(self, img, flags=cv2.INTER_LINEAR):
         return cv2.warpPerspective(img, self.M, (self.w, self.h), flags=flags)
 
+    def vehicle_x(self):
+        bottom_y = self.src[2][1]
+        pt = cv2.perspectiveTransform(np.float32([[[self.w / 2, bottom_y]]]), self.M)
+        return float(pt[0, 0, 0])
+
     def unwarp(self, img, flags=cv2.INTER_LINEAR):
         return cv2.warpPerspective(img, self.Minv, (self.w, self.h), flags=flags)
 

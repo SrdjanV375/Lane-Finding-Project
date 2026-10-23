@@ -20,6 +20,8 @@ The goals / steps of this project are the following:
 [image4]: ./docs/03_perspective.jpg "Warp Example"
 [image4b]: ./docs/03_binary_warped.jpg "Binary in bird's-eye view"
 [image5]: ./docs/04_lane_fit.jpg "Fit Visual"
+[image6]: ./docs/05_result_test2.jpg "Output"
+[image6b]: ./docs/05_all_test_images.jpg "All test images"
 ---
 
 ### Writeup / README
@@ -233,11 +235,100 @@ Histogram with peaks (left) and windows with line pixels (cyan) and fitted curve
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-TODO: Add your text here!!!
+
+**Goal.** From the two lane-line polynomials, compute how sharply the road bends (radius of curvature)
+and how far the car is from the centre of its lane, both in meters.
+
+**Code.** [lane_finding/measurements.py](Zadatak/lane_finding/measurements.py) (`curvature_radius`,
+`vehicle_offset`), used by [lane_finding/lane_image.py](Zadatak/lane_finding/lane_image.py); run with
+`python images_step.py`.
+
+**From pixels to meters.** The polynomials are in pixels of the top view, so I need to know how many
+meters one pixel is in each direction:
+* **across the road (x):** our lane is always 30 % of the image width in the top view (step 3), and a
+  highway lane is 3.7 m wide, so `xm = 3.7 / (0.30 * width)` meters per pixel;
+* **along the road (y):** I measured how long a piece of road the top view shows. Dashed lane lines repeat
+  every 12.2 m (3 m line + 9 m gap). In the top view of a straight road I found how many pixels one
+  dash + gap takes (`measure_view_length.py`, results in [docs/view_length.md](docs/view_length.md)):
+  the view shows about **19-21 m** of road for all cameras, so I use 20 m, i.e. `ym = 20 / height`.
+
+My first guess was 30 m; that would have made the radius up to 2.25 times too large, so measuring it was
+worth it.
+
+**Radius of curvature.** The pixel polynomial `x = A*y^2 + B*y + C` is converted to meters
+(`A_m = A * xm / ym^2`, `B_m = B * xm / ym`) and the radius is computed at the bottom of the image, where
+the car is:
+
+```
+R = (1 + (2*A_m*y + B_m)^2)^(3/2) / |2*A_m|
+```
+
+The lane radius is the average of the left and the right line. When the road is almost straight, `A` is
+almost 0 and the radius becomes very large and unstable, so above 3000 m it is shown as "straight".
+
+**Vehicle position.** The camera is in the middle of the car, so the car centre is the middle of the
+camera image. I project that point into the top view (`Perspective.vehicle_x`) and compare it with the
+middle between the two lines at the bottom of the image:
+
+```
+offset = (car_x - (left_x + right_x) / 2) * xm        (negative = car is left of the lane centre)
+```
+
+Example output (`python images_step.py`):
+
+```
+test2       measured  radius     572 m   offset -0.43 m   lane width 3.73 m
+test5       measured  radius    1555 m   offset -0.06 m   lane width 3.96 m
+```
+
+The lane width is also printed as a check: on all test images it is 3.6-4.0 m, close to the 3.7 m used
+for the x scale. These values are estimates - the scale depends on the assumed lane width and on a flat
+road.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-TODO: Add your text here!!!
+**Goal.** Show the found lane on the original (undistorted) image, together with the radius and the
+vehicle position.
+
+**Code.** [lane_finding/lane_image.py](Zadatak/lane_finding/lane_image.py) (`LaneImage.process`,
+`draw`), run with `python images_step.py`. It connects all steps for one image: undistort -> top view ->
+binary image + ROI -> lane lines -> checks -> measurements -> drawing.
+
+**How it is drawn.** The area between the two polynomials is filled in the **top view** and then warped
+back into the camera view with the inverse matrix `Minv` from step 3, and blended with the image. The
+lane is drawn only up to the height where the lines were really seen, not further.
+
+* **green** - our lane, both lines found;
+* **orange** - only one line was found; the other is drawn parallel to it, one lane width away;
+* **red** - a neighbouring lane in the same direction (when its outer line was also found).
+
+**Checks before drawing.** Not every line the search returns is accepted:
+* the two lines of our lane must form a realistic lane (2.8-4.6 m wide and roughly parallel);
+* a line with only a few dashes takes the shape of the better line, because lane lines are parallel -
+  otherwise its curve bends where it has no pixels;
+* in these recordings yellow lines are always on the left edge of our direction, and solid white lines on
+  the right edge of the road. So a yellow line is never accepted as the right line of our lane, and no
+  "neighbouring lane" is drawn behind a yellow or a solid line - that area is the shoulder or grass.
+  This is an assumption about the markings in this data set, not a general rule.
+
+Result on `test2.jpg`:
+
+![alt text][image6]
+
+**A mistake I found here.** The three `challange001xx` images are 960 x 540, so at first they got the
+perspective points of the 960 x 540 camera. In the top view the lane on two of them became narrower towards the top
+(by up to 16 %), which is wrong. Looking closer, they show the same bridge and the same cars as `test1`: they
+are frames of the 1280 x 720 camera, only resized. With the points of that camera the lines are parallel
+again (width change about 2 %), and the radius on `challange00136` changed from 2371 m to 551 m - close to
+`test1` (510 m), which is the same road. So for these images the camera setup is now set explicitly
+(`images_step.py`) instead of being guessed from the image size.
+
+All 17 test images, each processed on its own:
+
+![alt text][image6b]
+
+
+Each result in full size is in [docs/test_results](docs/test_results).
 
 ### Pipeline (video)
 

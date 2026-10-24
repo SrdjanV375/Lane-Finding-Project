@@ -24,6 +24,7 @@ The goals / steps of this project are the following:
 [image6b]: ./docs/05_all_test_images.jpg "All test images"
 [image7]: ./docs/06_video_project_video03.jpg "Video frames"
 [image7b]: ./docs/06_video_challenge03.jpg "Challenge video frames"
+
 ---
 
 ### Writeup / README
@@ -31,7 +32,43 @@ The goals / steps of this project are the following:
 #### 1. Provide a Writeup that includes all the rubric points and how you addressed each one.
 
 This document is the writeup. Each section answers one rubric point: where the code is, how the step
-works, and an example result. Sections are completed as the corresponding step is implemented.
+works, and an example result. All images are in [docs](docs), the result videos in [docs/videos](docs/videos).
+
+**Project structure.** All code is in the `Zadatak/` folder. The scripts in the folder run one step and
+save its images; the actual work is done in the `lane_finding/` package.
+
+| Script | What it does | Code in `lane_finding/` |
+|---|---|---|
+| `calibrate.py` | step 1: camera calibration, saves `camera_cal/calib.npz` | `calibration.py` |
+| `binary_step.py` | step 2: binary image | `thresholds.py` |
+| `perspective_step.py` | step 3: top view and ROI | `perspective.py` |
+| `lane_fit_step.py` | step 4: histogram, sliding window, polynomial | `lane_lines.py` |
+| `images_step.py` | steps 5-6: radius, offset, lane drawn on all test images | `measurements.py`, `lane_image.py` |
+| `measure_view_length.py` | how many meters of road the top view shows (for the y scale) | `perspective.py` |
+| `videos_step.py` | all six videos, tables and sample frames | `pipeline.py`, `tracking.py` |
+| `process_video.py` | one video (used by `videos_step.py`) | `pipeline.py`, `diagnostics.py` |
+
+`drawing.py` only builds the figures for this writeup (images side by side, grids with titles).
+
+**How to run.** From the `Zadatak/` folder (Python 3.12, packages in `requirements.txt`):
+
+```
+pip install -r requirements.txt
+python calibrate.py
+python binary_step.py
+python perspective_step.py
+python lane_fit_step.py
+python images_step.py
+python videos_step.py
+```
+
+`calibrate.py` must run first, because all other steps load the camera parameters from
+`camera_cal/calib.npz` (the file is also in the repository, so this step can be skipped). The other
+scripts do not depend on each other's output files, every one of them starts again from the original
+images. The images are written to `docs/`, the videos and their CSV files to `docs/videos/`.
+`videos_step.py` takes about 15 minutes. A single video can be processed with
+`python process_video.py test_videos/challenge02.mp4 --profile low_camera` (add `--diag` for the
+diagnostic video).
 
 ### Camera Calibration
 
@@ -59,8 +96,7 @@ where four squares meet), and its real geometry is known: the corners lie on a f
    how far they are from the detected corners (reprojection error).
 
 Two images (`calibration7.jpg`, `calibration15.jpg`) are 1281 x 721 instead of 1280 x 720, so all images
-are resized to 1280 x 720
-before corner detection.
+are resized to 1280 x 720 before corner detection.
 
 **Skipped images.** In `calibration1.jpg`, `calibration4.jpg` and `calibration5.jpg` the complete
 9 x 6 grid of corners is not found, because part of the board is outside or too close to the image
@@ -92,8 +128,8 @@ Distortion coefficients (k1, k2, p1, p2, k3): [-0.2374 -0.0879 -0.0008 -0.0001  
 
 **Removing distortion.** The function `undistort()` applies the estimated camera parameters using
 `cv2.undistort(img, mtx, dist, None, mtx)`. The original camera matrix is also used as the output
-camera matrix. The corrected images are then used when selecting the perspective-transform points in
-the next stage.
+camera matrix. The corrected images are used in all later steps, also when choosing the perspective-transform
+points in step 3.
 
 Calibration image before and after correction (`calibration1.jpg`; it is one of the skipped images,
 but the curved board edges show the effect clearly):
@@ -135,6 +171,10 @@ The binary image is made of two masks, one for **yellow** and one for **white** 
   2. **narrow** - morphological top-hat keeps only thin bright stripes, so big bright areas (concrete
      patches, cars) are removed;
   3. **not coloured** (low HSV saturation) - otherwise brown dirt next to the road was taken as a line.
+
+  A second, stricter rule also accepts a pixel without the histogram threshold, when it is clearly
+  brighter than its surroundings (stronger top-hat), not coloured and not too dark. It helps with lines
+  in shadow and on concrete. The white mask is the union of both rules.
 
 At the end, everything wider than a lane marking is removed.
 
@@ -253,6 +293,8 @@ meters one pixel is in each direction:
   every 12.2 m (3 m line + 9 m gap). In the top view of a straight road I found how many pixels one
   dash + gap takes (`measure_view_length.py`, results in [docs/view_length.md](docs/view_length.md)):
   the view shows about **19-21 m** of road for all cameras, so I use 20 m, i.e. `ym = 20 / height`.
+  The mountain road (`challenge03`) is the exception: it has no dashed lines to measure, and its top view
+  looks less far ahead (shorter trapezoid), so there I use an estimated **13 m**.
 
 My first guess was 30 m; that would have made the radius up to 2.25 times too large, so measuring it was
 worth it.
@@ -350,7 +392,8 @@ a download). The numbers are frames per state of the algorithm:
 | [challenge03](docs/videos/challenge03.mp4) | 1199 | 913 | 143 | 126 | 17 | 14 |
 
 *measured* = both lines found in this frame, *held* = a line kept from previous frames, *inferred* = one
-line drawn parallel to the other, *missing* = no lane shown. This is **not an accuracy**: a "measured"
+line drawn parallel to the other, *missing* = no lane shown, *warning frames* = frames with the lane
+departure warning. This is **not an accuracy**: a "measured"
 frame can still be wrong (e.g. a guardrail taken as a line), and a "held" frame can look correct. The
 quality was checked by looking at the result videos.
 
@@ -388,6 +431,11 @@ glare when driving out of the forest, and no dashed lines. For this video the ca
 ahead, and two extra rules use the road markings (the left line of our lane is the yellow middle line).
 It follows the road on most of the video, but not everywhere - see the discussion.
 
+The text at the top of every frame shows the radius, the vehicle position and the confidence of the four
+line positions from step 4: `L1` and `L2` are the lines of our lane, `L0` and `L3` the neighbouring lines.
+The confidence is the support of the line in this frame (0 % when the line is not found), and the state of
+the lane is written in brackets.
+
 Sample frames from `project_video03` (concrete, shadows, cars in the next lane):
 
 ![alt text][image7]
@@ -404,4 +452,35 @@ top view with ROI, binary image, search, histogram and fitted lines) can be made
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-TODO: Add your text here!!!
+
+**Problems faced**
+
+- **Concrete road.** With one fixed brightness threshold the whole bright concrete road became white. I now
+  take the threshold from the road in front of the car, so it is different for dark and bright asphalt.
+- **Dashed lines.** A dashed line has few pixels and big gaps, so the curve sometimes bent the wrong way.
+  A wider window after a gap, RANSAC and making a weak line parallel to the strong one fixed most of this.
+- **Different cameras.** The videos are not recorded with the same camera, so one set of perspective points
+  was not enough. Every camera got its own points.
+- **Meters per pixel.** At first I guessed that the top view shows 30 m of road. Measured from the dashed
+  lines it is about 20 m, so with the guess the radius was about two times too large.
+- **Video.** The hardest part was deciding when not to trust a new line, because a guardrail or the edge of
+  the road can look like a line for a few frames.
+
+**Where the pipeline may fail**
+
+The project videos and `challenge01` work in almost every frame, and `challenge02` and `challenge03` work
+most of the time. Problems appear only in short parts:
+
+- very dark shadows, like under the bridge in `challenge02` (the lane disappears for a moment and comes back);
+- strong sun glare when the car comes out of the forest in `challenge03`;
+- very sharp turns, where one line goes out of the image;
+- a guardrail very close to the lane line;
+- a different camera, because the perspective points are chosen for these recordings.
+
+**How to make it more robust**
+
+- Find the perspective points automatically instead of choosing them by hand for every camera.
+- Look less far ahead in sharp turns, so both lines stay in the image.
+- In frames with glare, trust the previous frames more than the new measurement.
+- Recognise guardrails by their shape and colour, not only by their position.
+- Mark the lanes by hand on some frames and compare, so the result can be measured with a number.

@@ -22,6 +22,8 @@ The goals / steps of this project are the following:
 [image5]: ./docs/04_lane_fit.jpg "Fit Visual"
 [image6]: ./docs/05_result_test2.jpg "Output"
 [image6b]: ./docs/05_all_test_images.jpg "All test images"
+[image7]: ./docs/06_video_project_video03.jpg "Video frames"
+[image7b]: ./docs/06_video_challenge03.jpg "Challenge video frames"
 ---
 
 ### Writeup / README
@@ -334,7 +336,69 @@ Each result in full size is in [docs/test_results](docs/test_results).
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-TODO: Add your text here!!!
+
+**Result videos** (click the name; GitHub shows smaller videos directly, larger ones with "View raw" or as
+a download). The numbers are frames per state of the algorithm:
+
+| Video | Frames | measured | held | inferred | missing | Warning frames |
+|---|---|---|---|---|---|---|
+| [project_video01](docs/videos/project_video01.mp4) | 221 | 221 | 0 | 0 | 0 | 0 |
+| [project_video02](docs/videos/project_video02.mp4) | 681 | 681 | 0 | 0 | 0 | 0 |
+| [project_video03](docs/videos/project_video03.mp4) | 1260 | 1259 | 1 | 0 | 0 | 0 |
+| [challenge01](docs/videos/challenge01.mp4) | 251 | 251 | 0 | 0 | 0 | 0 |
+| [challenge02](docs/videos/challenge02.mp4) | 484 | 444 | 15 | 20 | 5 | 0 |
+| [challenge03](docs/videos/challenge03.mp4) | 1199 | 913 | 143 | 126 | 17 | 14 |
+
+*measured* = both lines found in this frame, *held* = a line kept from previous frames, *inferred* = one
+line drawn parallel to the other, *missing* = no lane shown. This is **not an accuracy**: a "measured"
+frame can still be wrong (e.g. a guardrail taken as a line), and a "held" frame can look correct. The
+quality was checked by looking at the result videos.
+
+**Code.** [lane_finding/pipeline.py](Zadatak/lane_finding/pipeline.py) (`LaneFinder`),
+[lane_finding/tracking.py](Zadatak/lane_finding/tracking.py), [process_video.py](Zadatak/process_video.py);
+all six videos are processed with `python videos_step.py`. Every video also gets a CSV
+file with one row per frame (state of the lane, radius, offset, lane width, support of each line).
+
+**Why a single-image method is not enough.** Processing every frame on its own works, but the lane jumps
+from frame to frame, and in a frame with a shadow, glare or a car over the dashes a line is simply lost.
+In a video the lines move only a little between two frames (33-40 ms), so the previous frame helps a lot.
+
+**What is added for video:**
+* **Search around the previous line.** When a line was found in the previous frame, its pixels are
+  searched only in a narrow band around it (`polyfit_using_prev_fit`). Only when that fails, the sliding
+  window from step 4 starts again.
+* **Kalman filter for each line.** Each line is described by its position at three heights of the top
+  view. In every frame the filter first *predicts* the line (it stays where it was), then *corrects* it
+  with the new measurement. A measurement with little support (a few dashes) moves the line less than a
+  solid line, so the lane does not jump.
+* **Holding a lost line.** If a line is not found, it is kept from the previous frames for at most 8
+  frames (~0.3 s) and drawn in **orange**; after that it is dropped, so an old line is never shown for long.
+  If only one line is available, the other is drawn parallel to it at the last measured lane width.
+* **Checks between frames.** A line may not jump sideways more than a few percent of the image width
+  between frames, and the lane width may not change suddenly - such a "line" is usually a guardrail or the
+  edge of the road.
+* **Lane departure warning.** When the edge of the car comes closer than 0.15 m to a lane line for 5
+  frames in a row, the lane is drawn red with "Alert! Lane departure!".
+
+**How it works on the videos.** On the three project videos and `challenge01` the lane is measured in
+practically every frame, also on concrete, in shadows and with cars changing lanes. In `challenge02` the
+lane is lost for about one second under the bridge (dark shadow), held for a moment, and then found again.
+`challenge03` (mountain road) is much harder: sharp turns where one line leaves the camera view, strong
+glare when driving out of the forest, and no dashed lines. For this video the camera points look less far
+ahead, and two extra rules use the road markings (the left line of our lane is the yellow middle line).
+It follows the road on most of the video, but not everywhere - see the discussion.
+
+Sample frames from `project_video03` (concrete, shadows, cars in the next lane):
+
+![alt text][image7]
+
+Sample frames from `challenge03`:
+
+![alt text][image7b]
+
+Sample frames of all videos are in `docs/06_video_<name>.jpg`. A diagnostic video with six panels (result,
+top view with ROI, binary image, search, histogram and fitted lines) can be made with
+`python videos_step.py --diag`; these videos are not in the repository because of their size.
 
 ### Discussion
 

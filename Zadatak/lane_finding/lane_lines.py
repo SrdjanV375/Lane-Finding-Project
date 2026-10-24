@@ -147,6 +147,21 @@ def sliding_window_polyfit(binary, x_base, margin_rel=0.05, minpix=40):
     return fit_line(result, nonzero_y[idx], nonzero_x[idx], h, w)
 
 
+def polyfit_using_prev_fit(binary, prev_fit, margin_rel=0.04):
+    h, w = binary.shape
+    nonzero_y, nonzero_x = binary.nonzero()
+    idx = np.abs(nonzero_x - poly_x(prev_fit, nonzero_y)) < margin_rel * w
+    ys, xs = nonzero_y[idx], nonzero_x[idx]
+    # a band with too many pixels is not a thin line (same rule as for the sliding window)
+    win_h = h // N_WINDOWS
+    max_pix = 0.4 * (2 * margin_rel * w) * win_h
+    band = np.minimum(ys // win_h, N_WINDOWS - 1)
+    counts = np.bincount(band, minlength=N_WINDOWS)
+    ok = (counts >= 20) & (counts <= max_pix)
+    ys, xs = ys[ok[band]], xs[ok[band]]
+    return fit_line(LineFit(), ys, xs, h, w)
+
+
 def find_lines(binary):
     """Find all four lines in one binary bird's-eye image."""
     hist = histogram(binary)
